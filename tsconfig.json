@@ -1,0 +1,17 @@
+{
+    "include": ["."],
+    "exclude": ["archive"],
+    "compilerOptions": {
+        "noEmit": true,
+        "target": "ESNext",
+        "lib": ["ESNext"],
+        "types": [
+            "node",
+            "@types/jest"
+        ],
+        "module": "esnext",
+        "moduleResolution": "node", // Needed for ommiting file extensions
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+    }
+}
