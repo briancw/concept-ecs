@@ -42,6 +42,21 @@ export function createComponent(world, type, count) {
     }
 }
 
+export function hasComponent(component, entId) {
+    return component.entMap[entId] === 1
+}
+
+function hasAllComponents(components, entId) {
+    let hasAll = true
+    for (let index = 0; index < components.length; index += 1) {
+        const component = components[index]
+        if (!component.entMap[entId]) {
+            hasAll = false
+        }
+    }
+    return hasAll
+}
+
 export function addComponent(world, component, entId) {
     if (hasComponent(component, entId)) {
         throw new Error('This component has already been added')
@@ -58,21 +73,6 @@ export function addComponent(world, component, entId) {
             query.updated[0] = true
         }
     }
-}
-
-export function hasComponent(component, entId) {
-    return component.entMap[entId] === 1
-}
-
-function hasAllComponents(components, entId) {
-    let hasAll = true
-    for (let index = 0; index < components.length; index += 1) {
-        const component = components[index]
-        if (!component.entMap[entId]) {
-            hasAll = false
-        }
-    }
-    return hasAll
 }
 
 export function createQuery(world, components, count) {
@@ -99,4 +99,3 @@ export function createQuery(world, components, count) {
     const queryIndex = world.queries.push(query) - 1 // TODO this rubs me the wrong way
     return queryIndex
 }
-
