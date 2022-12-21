@@ -14,7 +14,7 @@ const typeMap = {
 }
 
 export function createWorld() {
-    const entIdMemory = new SharedArrayBuffer(32)
+    const entIdMemory = new SharedArrayBuffer(32) // TODO magic number
     const world = {
         entIdMemory,
         lastEntId: new Uint32Array(entIdMemory),
