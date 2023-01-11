@@ -15,12 +15,14 @@ const typeMap = {
 
 export function createWorld() {
     const entIdMemory = new SharedArrayBuffer(32) // TODO magic number
-    const world = {
+    const componentIdMemory = new SharedArrayBuffer(32) // TODO magic number
+    return {
         entIdMemory,
         lastEntId: new Uint32Array(entIdMemory),
-        queries: [],
+        componentIdMemory,
+        lastComponentId: new Uint32Array(componentIdMemory),
+        componentMap: new Uint32Array(1_000_000), // TODO magic number
     }
-    return world
 }
 
 export function createEntity(world) {
@@ -30,72 +32,52 @@ export function createEntity(world) {
 }
 
 export function createComponent(world, type, count) {
+    const componentId: number = world.lastComponentId[0]
+    world.lastComponentId[0] += 1
     const byteSize = typeMap[type].BYTES_PER_ELEMENT * count
     const componentMemory = new SharedArrayBuffer(byteSize)
     const componentData = new typeMap[type](componentMemory)
-    const entMapMemory = new SharedArrayBuffer(Uint8Array.BYTES_PER_ELEMENT * count)
-    const entMap = new Uint8Array(entMapMemory)
     return {
+        componentId,
         componentMemory,
         componentData,
-        entMap,
     }
 }
 
-export function hasComponent(component, entId) {
-    return component.entMap[entId] === 1
-}
+export function addComponent(world, component, entId, queries) {
+    // TODO check if ent already has component
 
-function hasAllComponents(components, entId) {
-    let hasAll = true
-    for (let index = 0; index < components.length; index += 1) {
-        const component = components[index]
-        if (!component.entMap[entId]) {
-            hasAll = false
-        }
-    }
-    return hasAll
-}
+    // Add component to componentMap for this entity
+    world.componentMap[entId] |= (1 << component.componentId)
 
-export function addComponent(world, component, entId) {
-    if (hasComponent(component, entId)) {
-        throw new Error('This component has already been added')
-    }
-    component.entMap[entId] = 1
+    // Check if this entity now belongs to any queries
+    for (let index = 0; index < queries.length; index += 1) {
+        const query = queries[index]
 
-    for (let index = 0; index < world.queries.length; index += 1) {
-        const query = world.queries[index]
-        // If this component exists in a query and
-        // If this ent has all the components of the query
-        if (query.components.includes(component) && hasAllComponents(query.components, entId)) {
-            query.internalEntityArray[query.lastIndex] = entId
+        if ((world.componentMap[entId] & query.mask) === query.mask) {
+            query.entities[query.lastIndex] = entId
             query.lastIndex += 1
-            query.updated[0] = true
         }
     }
 }
 
-export function createQuery(world, components, count) {
-    const internalEntityMemory = new SharedArrayBuffer(count * Uint32Array.BYTES_PER_ELEMENT)
-    const updateMemory = new SharedArrayBuffer(8)
+// TODO count can be automatically determined off of components
+export function createQuery(components, count) {
+    const entitiesMemory = new SharedArrayBuffer(count * Uint32Array.BYTES_PER_ELEMENT)
+    const entities = new Uint32Array(entitiesMemory)
 
-    const query = {
+    // Create a bitmask for the query
+    let mask = 0
+    for (let index = 0; index < components.length; index += 1) {
+        const {componentId} = components[index]
+        mask |= (1 << componentId)
+    }
+
+    return {
         components,
         lastIndex: 0,
-        internalEntityMemory,
-        internalEntityArray: new Uint32Array(internalEntityMemory),
-        ents: new Uint32Array(0),
-        updateMemory,
-        updated: new Uint8Array(updateMemory),
-        getEnts() {
-            if (this.updated[0]) {
-                // console.log('query updated, refresh ent cache')
-                this.updated[0] = false
-                this.ents = this.internalEntityArray.slice(0, this.lastIndex)
-            }
-            return this.ents
-        },
+        entitiesMemory,
+        entities,
+        mask,
     }
-    const queryIndex = world.queries.push(query) - 1 // TODO this rubs me the wrong way
-    return queryIndex
 }

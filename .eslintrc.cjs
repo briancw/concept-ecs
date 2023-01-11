@@ -22,6 +22,7 @@ module.exports = {
         ],
     },
     rules: {
+        'no-bitwise': 'off',
     },
     ignorePatterns: [
         'dist',
