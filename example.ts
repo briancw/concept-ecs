@@ -21,7 +21,7 @@ const initialEntCount = 50_000
 // Create ents with position and velocity
 for (let index = 0; index < initialEntCount; index += 1) {
     const ent = createEntity(world)
-    addComponent(world, Position, ent, queries)
+    addComponent(world, Position, ent, queries, true)
     addComponent(world, Velocity, ent, queries)
     Velocity.componentData[ent] = 1
 }
@@ -31,7 +31,7 @@ setInterval(() => {
     const newEntCount = 50_000
     for (let index = 0; index < newEntCount; index += 1) {
         const ent = createEntity(world)
-        addComponent(world, Position, ent, queries)
+        addComponent(world, Position, ent, queries, true)
         addComponent(world, Velocity, ent, queries)
         Velocity.componentData[ent] = 1
     }
@@ -45,10 +45,10 @@ setInterval(() => {
     }
     const iterationTime = performance.now() - iterationStart
     const iterationPerEnt = iterationTime / positionVelocityQuery.lastIndex
-
-    // console.log('create time:', (createTime).toFixed(2))
-    // console.log('iteration time:', (iterationTime * 1000 * 1000).toFixed(2) + 'ns')
+    console.log('create time:', (createTime).toFixed(2) + 'ms')
+    console.log('iteration time:', (iterationTime).toFixed(2) + 'ms', 'ents:', positionVelocityQuery.lastIndex.toLocaleString('en-US'))
     console.log('create time per:', (createTimePerEnt * 1000 * 1000).toFixed(2) + 'ns')
     console.log('iteration time per:', (iterationPerEnt * 1000 * 1000).toFixed(2) + 'ns')
+    console.log('----')
 }, 1000)
 

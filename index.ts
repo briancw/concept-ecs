@@ -44,19 +44,27 @@ export function createComponent(world, type, count) {
     }
 }
 
-export function addComponent(world, component, entId, queries) {
+export function addComponent(world, component, entId, queries, skipQuery = false) {
     // TODO check if ent already has component
+    if ((world.componentMap[entId] & (1 << component.componentId)) !== 0) {
+        throw new Error('entity already has this component')
+    }
 
     // Add component to componentMap for this entity
     world.componentMap[entId] |= (1 << component.componentId)
 
-    // Check if this entity now belongs to any queries
-    for (let index = 0; index < queries.length; index += 1) {
-        const query = queries[index]
-
-        if ((world.componentMap[entId] & query.mask) === query.mask) {
-            query.entities[query.lastIndex] = entId
-            query.lastIndex += 1
+    if (!skipQuery) {
+        // Check if this entity now belongs to any queries
+        for (let index = 0; index < queries.length; index += 1) {
+            const query = queries[index]
+            // If this component exists on the query (prevents adding the same ent multiple times)
+            if (query.mask & (1 << component.componentId)) {
+                // eslint-disable-next-line unicorn/no-lonely-if
+                if ((world.componentMap[entId] & query.mask) === query.mask) {
+                    query.entities[query.lastIndex] = entId
+                    query.lastIndex += 1
+                }
+            }
         }
     }
 }

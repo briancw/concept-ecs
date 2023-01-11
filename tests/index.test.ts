@@ -4,6 +4,7 @@ const maxEntCount = 100
 const world = createWorld()
 const Position = createComponent(world, 'f32', maxEntCount)
 const Velocity = createComponent(world, 'f32', maxEntCount)
+const Foo = createComponent(world, 'f32', maxEntCount)
 const query = createQuery([Position, Velocity], maxEntCount)
 const queries = [query]
 
@@ -21,7 +22,7 @@ test('create 5 entities matching the query', () => {
     const entCount = 5
     for (let index = 0; index < entCount; index += 1) {
         const entId = createEntity(world)
-        addComponent(world, Position, entId, queries)
+        addComponent(world, Position, entId, queries, true)
         addComponent(world, Velocity, entId, queries)
 
         // Set component velocity to 1
@@ -37,6 +38,26 @@ test('create 5 entities matching the query', () => {
     // const ents = world.queries[query].getEnts()
     // expect(ents.length).toBe(entCount)
     expect(query.lastIndex).toBe(entCount)
+})
+
+test('create 5 entities matching the query plus more components', () => {
+    const entCount = 5
+    for (let index = 0; index < entCount; index += 1) {
+        const entId = createEntity(world)
+        addComponent(world, Position, entId, queries)
+        addComponent(world, Velocity, entId, queries)
+        addComponent(world, Foo, entId, queries)
+
+        // Set component velocity to 1
+        Velocity.componentData[entId] = 1
+
+        // Expect this ent to exist in the query
+        const ents = query.entities
+        expect(ents).toContain(entId)
+    }
+
+    // Expect there to be as many ents in the query as created
+    expect(query.lastIndex).toBe(entCount * 2) // TODO this isn't great
 })
 
 test('create 5 ents not matching the query', () => {
@@ -68,13 +89,13 @@ test('update component values from a query', () => {
     }
 })
 
-// test('should throw if adding the same component to the same entity more than once', () => {
-//     const ent = createEntity(world)
-//     expect(() => {
-//         addComponent(world, Position, ent)
-//         addComponent(world, Position, ent)
-//     }).toThrow()
-// })
+test('should throw if adding the same component to the same entity more than once', () => {
+    const ent = createEntity(world)
+    expect(() => {
+        addComponent(world, Position, ent, queries)
+        addComponent(world, Position, ent, queries)
+    }).toThrow()
+})
 
 // test('add more components than allocated', () => {
 //     for (let i = 0; i < maxEntCount; i += 1) {
