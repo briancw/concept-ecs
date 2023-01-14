@@ -1,9 +1,9 @@
-import {createWorld, createComponent, createEntity, createQuery, addComponent, removeComponent} from '.'
+import {createWorld, createComponent, createEntity, createQuery, addComponent, removeComponent, removeEntity} from '.'
 
 const maxEntCount = 10_000_000
 const world = createWorld()
-const Position = createComponent(world, 'f32', maxEntCount)
-const Velocity = createComponent(world, 'f32', maxEntCount)
+const Position = createComponent(world, Float32Array, maxEntCount)
+const Velocity = createComponent(world, Float32Array, maxEntCount)
 const positionVelocityQuery = createQuery([Position, Velocity], maxEntCount)
 const queries = [positionVelocityQuery]
 
@@ -34,6 +34,7 @@ setInterval(() => {
         const entId = positionVelocityQuery.entities[0]
         removeComponent(world, Position, entId, queries)
         removeComponent(world, Velocity, entId, queries)
+        removeEntity(world, entId)
     }
     const removeTime = performance.now() - removeStart
 
@@ -42,6 +43,7 @@ setInterval(() => {
     const removeTimePerEnt = removeTime / newEntCount
 
     console.log('ent count:', newEntCount.toLocaleString('en-US'))
+    console.log('max ent:', (world.lastEntId[0] - 1).toLocaleString('en-US'))
     console.log('create time:', (createTime).toFixed(2) + 'ms')
     console.log('remove time:', (removeTime).toFixed(2) + 'ms')
     console.log('iteration time:', (iterationTime).toFixed(2) + 'ms')

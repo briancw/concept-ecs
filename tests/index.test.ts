@@ -1,10 +1,10 @@
-import {createWorld, createComponent, createEntity, addComponent, removeComponent, createQuery} from '../index'
+import {createWorld, createComponent, createEntity, removeEntity, addComponent, removeComponent, createQuery} from '../index'
 
 const maxEntCount = 100
 const world = createWorld()
-const Position = createComponent(world, 'f32', maxEntCount)
-const Velocity = createComponent(world, 'f32', maxEntCount)
-const Foo = createComponent(world, 'f32', maxEntCount)
+const Position = createComponent(world, Float32Array, maxEntCount)
+const Velocity = createComponent(world, Float32Array, maxEntCount)
+const Foo = createComponent(world, Float32Array, maxEntCount)
 const query = createQuery([Position, Velocity], maxEntCount)
 const queries = [query]
 
@@ -98,6 +98,20 @@ test('remove components from entities', () => {
     removeComponent(world, Velocity, entId, queries)
 })
 
+test('remove entities', () => {
+    const entId = createEntity(world)
+    removeEntity(world, entId)
+
+    expect(world.deletedEntities).toContain(entId)
+})
+
+test('id re-use', () => {
+    const entId = createEntity(world)
+    removeEntity(world, entId)
+    const newEntId = createEntity(world)
+    expect(newEntId).toBe(entId)
+})
+
 test('should throw if adding the same component to the same entity more than once', () => {
     const ent = createEntity(world)
     expect(() => {
@@ -110,6 +124,14 @@ test('should throw if removing a component that an entity does not have', () => 
     const ent = createEntity(world)
     expect(() => {
         removeComponent(world, Position, ent, queries)
+    }).toThrow()
+})
+
+test('should throw if removing entities with existing components', () => {
+    const entId = createEntity(world)
+    addComponent(world, Position, entId, queries)
+    expect(() => {
+        removeEntity(world, entId)
     }).toThrow()
 })
 

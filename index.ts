@@ -1,18 +1,6 @@
 /* eslint-disable jsdoc/require-jsdoc */
-const typeMap = {
-    int8: Int8Array,
-    uint8: Uint8Array,
-    uint8c: Uint8ClampedArray,
-    int16: Int16Array,
-    uint16: Uint16Array,
-    int32: Int32Array,
-    uint32: Uint32Array,
-    f32: Float32Array,
-    f64: Float64Array,
-    bint64: BigInt64Array,
-    buint64: BigUint64Array,
-}
-
+// TODO use better name. (entId)
+// TODO make component map cross threadable
 // TODO set max ent count once on world rather than multiple times (probably)
 export function createWorld() {
     const entIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
@@ -25,21 +13,40 @@ export function createWorld() {
         componentIdMemory,
         lastComponentId: new Uint32Array(componentIdMemory),
         componentMap: new Uint32Array(10_000_000), // TODO magic number
+        deletedEntities: new Uint32Array(10_000_000), // TODO magic number
+        deletedEntitiesIndex: new Uint32Array(1),
     }
 }
 
 export function createEntity(world) {
+    if (world.deletedEntitiesIndex[0]) {
+        const id: number = world.deletedEntities[world.deletedEntitiesIndex[0] - 1]
+        world.deletedEntities[world.deletedEntitiesIndex[0]] = 0 // TODO won't be necessary after making a typed array helper lib
+        world.deletedEntitiesIndex[0] -= 1
+        return id
+    }
     const id: number = world.lastEntId[0]
     world.lastEntId[0] += 1
     return id
 }
 
+export function removeEntity(world, entityId) {
+    // Check if this entity has any components
+    if (world.componentMap[entityId] !== 0) {
+        throw new Error('entity has components')
+    }
+    world.deletedEntities[world.deletedEntitiesIndex] = entityId
+    world.deletedEntitiesIndex[0] += 1
+}
+
+// TODO some validation on type
+// TODO instantiation of array could probably be done cleaner
 export function createComponent(world, type, count) {
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
-    const byteSize = typeMap[type].BYTES_PER_ELEMENT * count
+    const byteSize = type.BYTES_PER_ELEMENT * count
     const componentMemory = new SharedArrayBuffer(byteSize)
-    const componentData = new typeMap[type](componentMemory)
+    const componentData = new type(componentMemory)
     return {
         componentId,
         componentMemory,
