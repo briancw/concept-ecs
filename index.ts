@@ -13,15 +13,18 @@ const typeMap = {
     buint64: BigUint64Array,
 }
 
+// TODO set max ent count once on world rather than multiple times (probably)
 export function createWorld() {
-    const entIdMemory = new SharedArrayBuffer(32) // TODO magic number
-    const componentIdMemory = new SharedArrayBuffer(32) // TODO magic number
+    const entIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
+    const componentIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
+    const lastEntId = new Uint32Array(entIdMemory)
+    lastEntId[0] = 1 // Start entities at one to avoid confusion in queries
     return {
         entIdMemory,
-        lastEntId: new Uint32Array(entIdMemory),
+        lastEntId,
         componentIdMemory,
         lastComponentId: new Uint32Array(componentIdMemory),
-        componentMap: new Uint32Array(1_000_000), // TODO magic number
+        componentMap: new Uint32Array(10_000_000), // TODO magic number
     }
 }
 
@@ -45,7 +48,6 @@ export function createComponent(world, type, count) {
 }
 
 export function addComponent(world, component, entId, queries, skipQuery = false) {
-    // TODO check if ent already has component
     if ((world.componentMap[entId] & (1 << component.componentId)) !== 0) {
         throw new Error('entity already has this component')
     }
@@ -67,6 +69,32 @@ export function addComponent(world, component, entId, queries, skipQuery = false
             }
         }
     }
+}
+
+export function removeComponent(world, component, entId, queries) {
+    if ((world.componentMap[entId] & (1 << component.componentId)) === 0) {
+        throw new Error('entity does not have this component')
+    }
+
+    // Check if this entity belongs to any queries
+    for (let index = 0; index < queries.length; index += 1) {
+        const query = queries[index]
+        // If this query contains the component being removed
+        if (query.mask & (1 << component.componentId)) {
+            // If this component matches this query
+            // eslint-disable-next-line unicorn/no-lonely-if
+            if ((world.componentMap[entId] & query.mask) === query.mask) {
+                // Overwrite the deleted entity with the last one in the array
+                const queryIndex = query.entities.indexOf(entId)
+                query.entities[queryIndex] = query.entities[query.lastIndex - 1]
+                query.entities[query.lastIndex - 1] = 0 // TODO probably unecessary. Remove when queries get better returns.
+                query.lastIndex -= 1
+            }
+        }
+    }
+
+    // Remove this component from the component map
+    world.componentMap[entId] &= ~(1 << component.componentId)
 }
 
 // TODO count can be automatically determined off of components

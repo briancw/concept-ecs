@@ -1,4 +1,4 @@
-import {createWorld, createComponent, createEntity, addComponent, createQuery} from '../index'
+import {createWorld, createComponent, createEntity, addComponent, removeComponent, createQuery} from '../index'
 
 const maxEntCount = 100
 const world = createWorld()
@@ -89,6 +89,15 @@ test('update component values from a query', () => {
     }
 })
 
+test('remove components from entities', () => {
+    const ents = query.entities
+    const randomIndex = Math.floor(Math.random() * query.lastIndex)
+    const entId = ents[randomIndex]
+    removeComponent(world, Position, entId, queries)
+    expect(ents).not.toContain(entId)
+    removeComponent(world, Velocity, entId, queries)
+})
+
 test('should throw if adding the same component to the same entity more than once', () => {
     const ent = createEntity(world)
     expect(() => {
@@ -96,6 +105,16 @@ test('should throw if adding the same component to the same entity more than onc
         addComponent(world, Position, ent, queries)
     }).toThrow()
 })
+
+test('should throw if removing a component that an entity does not have', () => {
+    const ent = createEntity(world)
+    expect(() => {
+        removeComponent(world, Position, ent, queries)
+    }).toThrow()
+})
+
+// TODO test if an ent has a component
+// TODO test if an ent does not have a component
 
 // test('add more components than allocated', () => {
 //     for (let i = 0; i < maxEntCount; i += 1) {
