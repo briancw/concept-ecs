@@ -1,11 +1,10 @@
-import {createWorld, createComponent, createEntity, createQuery, addComponent, removeComponent, removeEntity} from '.'
+import {createWorld, createComponent, createEntity, createQuery, addComponent, removeComponent, removeEntity} from './index'
 
 const maxEntCount = 10_000_000
 const world = createWorld()
 const Position = createComponent(world, Float32Array, maxEntCount)
 const Velocity = createComponent(world, Float32Array, maxEntCount)
 const positionVelocityQuery = createQuery([Position, Velocity], maxEntCount)
-const queries = [positionVelocityQuery]
 
 setInterval(() => {
     const newEntCount = 100_000
@@ -14,15 +13,22 @@ setInterval(() => {
     const createStart = performance.now()
     for (let index = 0; index < newEntCount; index += 1) {
         const entId = createEntity(world)
-        addComponent(world, Position, entId, queries, true)
-        addComponent(world, Velocity, entId, queries)
+        addComponent(world, Position, entId)
+        addComponent(world, Velocity, entId)
         Velocity.componentData[entId] = 1
     }
     const createTime = performance.now() - createStart
 
+    // Query
+    // positionVelocityQuery.entities.fill(0)
+    const queryStart = performance.now()
+    positionVelocityQuery.getEnts(world)
+    // console.log(positionVelocityQuery.entities)
+    const queryTime = performance.now() - queryStart
+
     // Iterate
     const iterationStart = performance.now()
-    for (let index = 0; index < positionVelocityQuery.lastIndex; index += 1) {
+    for (let index = 0; index < positionVelocityQuery.lastIndex[0]; index += 1) {
         const entId = positionVelocityQuery.entities[index]
         Position.componentData[entId] += Velocity.componentData[entId]
     }
@@ -31,13 +37,16 @@ setInterval(() => {
     // Remove
     const removeStart = performance.now()
     for (let index = 0; index < newEntCount; index += 1) {
-        const entId = positionVelocityQuery.entities[0]
-        removeComponent(world, Position, entId, queries)
-        removeComponent(world, Velocity, entId, queries)
+        const entId = positionVelocityQuery.entities[index]
+        removeComponent(world, Position, entId)
+        removeComponent(world, Velocity, entId)
         removeEntity(world, entId)
     }
     const removeTime = performance.now() - removeStart
+    // console.log(world.deletedEntities)
 
+    const fullTime = queryTime + iterationTime
+    const fullTimePer = fullTime / newEntCount
     const createTimePerEnt = createTime / newEntCount
     const iterationPerEnt = iterationTime / newEntCount
     const removeTimePerEnt = removeTime / newEntCount
@@ -47,10 +56,13 @@ setInterval(() => {
     console.log('create time:', (createTime).toFixed(2) + 'ms')
     console.log('remove time:', (removeTime).toFixed(2) + 'ms')
     console.log('iteration time:', (iterationTime).toFixed(2) + 'ms')
+    console.log('query time:', (queryTime).toFixed(2) + 'ms')
+    console.log('full time', (fullTime).toFixed(2) + 'ms')
 
     console.log('create time per:', (createTimePerEnt * 1000 * 1000).toFixed(2) + 'ns')
     console.log('remove time per:', (removeTimePerEnt * 1000 * 1000).toFixed(2) + 'ns')
     console.log('iteration time per:', (iterationPerEnt * 1000 * 1000).toFixed(2) + 'ns')
+    console.log('full time per:', (fullTimePer * 1000 * 1000).toFixed(2) + 'ns')
     console.log('----')
 }, 1000)
 

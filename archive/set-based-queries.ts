@@ -55,18 +55,69 @@ export function createComponent(world, type, count) {
     }
 }
 
-export function addComponent(world, component, entId) {
+export function addComponent(world, component, entId, queries, skipQuery = false) {
     if ((world.componentMap[entId] & (1 << component.componentId)) !== 0) {
         throw new Error('entity already has this component')
     }
 
     // Add component to componentMap for this entity
     world.componentMap[entId] |= (1 << component.componentId)
+
+    if (!skipQuery) {
+        // Check if this entity now belongs to any queries
+        for (let index = 0; index < queries.length; index += 1) {
+            const query = queries[index]
+            // If this component exists on the query (prevents adding the same ent multiple times)
+            if (query.mask & (1 << component.componentId)) {
+                // eslint-disable-next-line unicorn/no-lonely-if
+                if ((world.componentMap[entId] & query.mask) === query.mask) {
+                    query.entities[query.lastIndex] = entId
+                    // query.entMap[entId] = query.lastIndex
+                    query.lastIndex += 1
+                }
+            }
+        }
+    }
 }
 
-export function removeComponent(world, component, entId) {
+export function removeComponent(world, component, entId, queries) {
     if ((world.componentMap[entId] & (1 << component.componentId)) === 0) {
         throw new Error('entity does not have this component')
+    }
+
+    // Check if this entity belongs to any queries
+    for (let index = 0; index < queries.length; index += 1) {
+        const query = queries[index]
+        // If this query contains the component being removed
+        if (query.mask & (1 << component.componentId)) {
+            // If this component matches this query
+            // eslint-disable-next-line unicorn/no-lonely-if
+            if ((world.componentMap[entId] & query.mask) === query.mask) {
+                // Overwrite the deleted entity with the last one in the array
+                // const queryIndex = query.entities.indexOf(entId)
+                // const queryIndex = query.entMap[entId]
+
+                // query.entities[queryIndex] = query.entities[query.lastIndex - 1]
+                // query.entMap[queryIndex] = query.entMap[query.lastIndex - 1]
+
+                // query.entMap[query.lastIndex - 1] = 0
+                // query.entities[query.lastIndex - 1] = 0 // TODO probably unecessary. Remove when queries get better returns.
+
+                // query.lastIndex -= 1
+
+                // Slice based
+                // const queryIndex = query.entities.indexOf(entId)
+                // query.entities.set(query.entities.slice(queryIndex + 1), queryIndex)
+                // // query.entities[query.lastIndex] = 0 // Not needed but helps debug
+                // query.lastIndex -= 1
+
+                // Zero out and deal with later
+                // const queryIndex = query.entities.indexOf(entId)
+                const queryIndex = (entId - 1)
+                query.entities[queryIndex] = 0
+                query.lastIndex -= 1
+            }
+        }
     }
 
     // Remove this component from the component map
@@ -77,7 +128,6 @@ export function removeComponent(world, component, entId) {
 export function createQuery(components, count) {
     const entitiesMemory = new SharedArrayBuffer(count * Uint32Array.BYTES_PER_ELEMENT)
     const entities = new Uint32Array(entitiesMemory)
-    const lastIndex = new Uint32Array(1)
 
     // Create a bitmask for the query
     let mask = 0
@@ -86,24 +136,12 @@ export function createQuery(components, count) {
         mask |= (1 << componentId)
     }
 
-    const getEnts = function(world) {
-        // TODO caching
-        this.lastIndex[0] = 0
-        for (let entIndex = 0; entIndex < world.lastEntId[0]; entIndex += 1) {
-            if ((world.componentMap[entIndex] & this.mask) === this.mask) {
-                this.entities[this.lastIndex[0]] = entIndex
-                this.lastIndex[0] += 1
-            }
-        }
-    }
-
     return {
         components,
-        lastIndex,
+        lastIndex: 0,
         entitiesMemory,
         entities,
         mask,
-        getEnts,
-        cached: false,
+        // entMap: new Uint32Array(10_000_000),
     }
 }
