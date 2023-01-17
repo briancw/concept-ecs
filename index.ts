@@ -1,33 +1,38 @@
 /* eslint-disable jsdoc/require-jsdoc */
 // TODO use better name. (entId)
-// TODO make component map cross threadable
-// TODO set max ent count once on world rather than multiple times (probably)
-export function createWorld() {
-    const entIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
+export function createWorld(maxEntityCount = 1_000_000) {
+    const entityIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
+    const deletedEntitiesIndexMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
     const componentIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
-    const lastEntId = new Uint32Array(entIdMemory)
-    lastEntId[0] = 1 // Start entities at one to avoid confusion in queries
+    const componentMapMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * maxEntityCount)
+    const deletedEntitiesMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * maxEntityCount)
+
     return {
-        entIdMemory,
-        lastEntId,
+        // Array buffers for sharing world data across threads
+        entityIdMemory,
+        deletedEntitiesIndexMemory,
         componentIdMemory,
+        componentMapMemory,
+        deletedEntitiesMemory,
+        // World Data
+        lastEntityId: new Uint32Array(entityIdMemory),
         lastComponentId: new Uint32Array(componentIdMemory),
-        componentMap: new Uint32Array(10_000_000), // TODO magic number
-        deletedEntities: new Uint32Array(10_000_000), // TODO magic number
-        deletedEntitiesIndex: new Uint32Array(1),
+        componentMap: new Uint32Array(componentMapMemory),
+        deletedEntities: new Uint32Array(deletedEntitiesMemory),
+        deletedEntitiesIndex: new Uint32Array(deletedEntitiesIndexMemory),
+        maxEntityCount,
     }
 }
 
 export function createEntity(world) {
-    // TODO entity reuse is currently LILO. FIFO might be better for cache locality, but might not be worth the complexity and performance of implementing.
     if (world.deletedEntitiesIndex[0]) {
         const id: number = world.deletedEntities[world.deletedEntitiesIndex[0] - 1]
-        world.deletedEntities[world.deletedEntitiesIndex[0]] = 0 // TODO won't be necessary after making a typed array helper lib
+        // world.deletedEntities[world.deletedEntitiesIndex[0]] = 0 // Helps for debugging, but isn't strictly necessary
         world.deletedEntitiesIndex[0] -= 1
         return id
     }
-    const id: number = world.lastEntId[0]
-    world.lastEntId[0] += 1
+    const id: number = world.lastEntityId[0]
+    world.lastEntityId[0] += 1
     return id
 }
 
@@ -40,14 +45,18 @@ export function removeEntity(world, entityId) {
     world.deletedEntitiesIndex[0] += 1
 }
 
-// TODO some validation on type
-// TODO instantiation of array could probably be done cleaner
-export function createComponent(world, type, count) {
+export function createComponent(world, TypedArrayConstructor) {
+    if (Object.getPrototypeOf(TypedArrayConstructor).name !== 'TypedArray') {
+        throw new Error('Component is not a typed array')
+    }
+
+    // Add this component to the world data
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
-    const byteSize = type.BYTES_PER_ELEMENT * count
+
+    const byteSize = TypedArrayConstructor.BYTES_PER_ELEMENT * world.maxEntityCount
     const componentMemory = new SharedArrayBuffer(byteSize)
-    const componentData = new type(componentMemory)
+    const componentData = new TypedArrayConstructor(componentMemory)
     return {
         componentId,
         componentMemory,
@@ -55,33 +64,32 @@ export function createComponent(world, type, count) {
     }
 }
 
-export function addComponent(world, component, entId) {
-    if ((world.componentMap[entId] & (1 << component.componentId)) !== 0) {
+export function addComponent(world, component, entityId) {
+    if ((world.componentMap[entityId] & (1 << component.componentId)) !== 0) {
         throw new Error('entity already has this component')
     }
 
     // Add component to componentMap for this entity
-    world.componentMap[entId] |= (1 << component.componentId)
+    world.componentMap[entityId] |= (1 << component.componentId)
 }
 
-export function removeComponent(world, component, entId) {
-    if ((world.componentMap[entId] & (1 << component.componentId)) === 0) {
+export function removeComponent(world, component, entityId) {
+    if ((world.componentMap[entityId] & (1 << component.componentId)) === 0) {
         throw new Error('entity does not have this component')
     }
 
     // Remove this component from the component map
-    world.componentMap[entId] &= ~(1 << component.componentId)
+    world.componentMap[entityId] &= ~(1 << component.componentId)
 }
 
-export function hasComponent(world, component, entId) {
-    return (world.componentMap[entId] & (1 << component.componentId)) !== 0
+export function hasComponent(world, component, entityId) {
+    return (world.componentMap[entityId] & (1 << component.componentId)) !== 0
 }
 
-// TODO count can be automatically determined off of components
-export function createQuery(components, count) {
-    const entitiesMemory = new SharedArrayBuffer(count * Uint32Array.BYTES_PER_ELEMENT)
+export function createQuery(world, components, notComponents) {
+    const entitiesMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * world.maxEntityCount)
     const entities = new Uint32Array(entitiesMemory)
-    const lastIndex = new Uint32Array(1)
+    const lastIndex = new Uint32Array(1) // TODO does this need to be a typed array if queries are create on each thread?
 
     // Create a bitmask for the query
     let mask = 0
@@ -90,15 +98,10 @@ export function createQuery(components, count) {
         mask |= (1 << componentId)
     }
 
-    const getEnts = function(world) {
-        // TODO caching
-        this.lastIndex[0] = 0
-        for (let entIndex = 0; entIndex < world.lastEntId[0]; entIndex += 1) {
-            if ((world.componentMap[entIndex] & this.mask) === this.mask) {
-                this.entities[this.lastIndex[0]] = entIndex
-                this.lastIndex[0] += 1
-            }
-        }
+    let notMask = 0
+    for (let index = 0; index < notComponents.length; index += 1) {
+        const {componentId} = notComponents[index]
+        notMask |= (1 << componentId)
     }
 
     return {
@@ -107,6 +110,25 @@ export function createQuery(components, count) {
         entitiesMemory,
         entities,
         mask,
-        getEnts,
+        notMask,
+    }
+}
+
+// Feature: Allow inclusive and exclusive queries
+export function runQuery(world, query) {
+    // Reset the entitiy count
+    query.lastIndex[0] = 0
+
+    // Find all entities that match the query from the world componentMap
+    for (let entIndex = 0; entIndex < world.lastEntityId[0]; entIndex += 1) {
+        // Continue if this ent has components in the not list
+        if ((world.componentMap[entIndex] & query.notMask) !== 0) {
+            continue
+        }
+        // If this entity has all of the components in the query
+        if ((world.componentMap[entIndex] & query.mask) === query.mask) {
+            query.entities[query.lastIndex[0]] = entIndex
+            query.lastIndex[0] += 1
+        }
     }
 }
