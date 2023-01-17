@@ -1,4 +1,4 @@
-import {createWorld, createComponent, createEntity, removeEntity, addComponent, removeComponent, createQuery} from '../index'
+import {createWorld, createComponent, createEntity, removeEntity, addComponent, removeComponent, createQuery, hasComponent} from '../index'
 
 const maxEntCount = 100
 const world = createWorld()
@@ -110,6 +110,14 @@ test('id re-use', () => {
     removeEntity(world, entId)
     const newEntId = createEntity(world)
     expect(newEntId).toBe(entId)
+})
+
+test('check if an entity has a component', () => {
+    const entId = createEntity(world)
+    addComponent(world, Position, entId)
+
+    expect(hasComponent(world, Position, entId)).toBe(true)
+    expect(hasComponent(world, Velocity, entId)).toBe(false)
 })
 
 test('should throw if adding the same component to the same entity more than once', () => {

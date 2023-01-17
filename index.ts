@@ -73,6 +73,10 @@ export function removeComponent(world, component, entId) {
     world.componentMap[entId] &= ~(1 << component.componentId)
 }
 
+export function hasComponent(world, component, entId) {
+    return (world.componentMap[entId] & (1 << component.componentId)) !== 0
+}
+
 // TODO count can be automatically determined off of components
 export function createQuery(components, count) {
     const entitiesMemory = new SharedArrayBuffer(count * Uint32Array.BYTES_PER_ELEMENT)
@@ -104,6 +108,5 @@ export function createQuery(components, count) {
         entities,
         mask,
         getEnts,
-        cached: false,
     }
 }
