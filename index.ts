@@ -135,7 +135,7 @@ export function hasComponent(world, component, entityId) {
  * @param   {Array}  notComponents A list of components to exclude in this query
  * @returns {object}               An ECS query
  */
-export function createQuery(world, components, notComponents) {
+export function createQuery(world, components, notComponents = []) {
     const entitiesMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * world.maxEntityCount)
     const entities = new Uint32Array(entitiesMemory)
     const lastIndex = new Uint32Array(1) // TODO does this need to be a typed array if queries are create on each thread?

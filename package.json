@@ -10,9 +10,6 @@
   "keywords": [],
   "author": "Brian Whicheloe <brian@whicheloe.us> (https://whicheloe.us/)",
   "license": "MIT",
-  "dependencies": {
-    "web-worker": "^1.2.0"
-  },
   "devDependencies": {
     "@types/jest": "^29.2.4",
     "@types/node": "^18.11.15",

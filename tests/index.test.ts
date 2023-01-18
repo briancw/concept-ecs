@@ -164,8 +164,10 @@ test('should throw if removing entities with existing components', () => {
 })
 
 // TODO test if an ent has a component
+
 // TODO test if an ent does not have a component
 
+// TODO add more than 32 components to an entity
 // test('add more components than allocated', () => {
 //     for (let i = 0; i < maxEntCount; i += 1) {
 //         const ent = createEntity(world)
