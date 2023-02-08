@@ -77,18 +77,18 @@ export const removeEntity = (world, entityId) => {
 // Zod seems like a good way to get automatic typing out and validation
 // type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array
 type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
-type component = {
-    componentId: number,
-    componentMemory: SharedArrayBuffer,
-    // TODO add types for component data (or let zod do it maybe)
-}
+// type component = {
+//     componentId: number,
+//     componentMemory: SharedArrayBuffer,
+//     // TODO add types for component data (or let zod do it maybe)
+// }
 // TODO Validate schema
 /**
  * @param   world  - ECS world object
  * @param   schema - Component Schema
  * @returns        - An ECS component
  */
-export const createComponent = (world, schema): component => {
+export const createComponent = (world, schema) => {
     // Add this component to the world data
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
@@ -99,7 +99,7 @@ export const createComponent = (world, schema): component => {
         bytesPerEntity += TypedArray.BYTES_PER_ELEMENT
     })
     const componentMemory = new SharedArrayBuffer(bytesPerEntity * world.maxEntityCount)
-    const component: component = {
+    const component = {
         componentId,
         componentMemory,
     }

@@ -2,20 +2,17 @@ import {createWorld, createComponent, createEntity, removeEntity, addComponent, 
 
 const maxEntityCount = 100
 const world = createWorld(maxEntityCount)
-const Position = createComponent(world, {value: Float32Array})
-console.log(Position.value)
-const Velocity = createComponent(world, {value: Float32Array})
-const Foo = createComponent(world, {value: Float32Array})
-const Bar = createComponent(world, {value: Float32Array})
+const Position: any = createComponent(world, {value: Float32Array})
+const Velocity: any = createComponent(world, {value: Float32Array})
+const Foo: any = createComponent(world, {value: Float32Array})
+const Bar: any = createComponent(world, {value: Float32Array})
 
 test('create a world', () => {
     expect(world).toBeDefined()
     expect(world).toMatchObject({})
 })
 
-/*
 test('create a component', () => {
-    console.log(Position.value)
     expect(Position.value).toBeInstanceOf(Float32Array)
     expect(Position.value.length).toBe(maxEntityCount)
 })
@@ -162,7 +159,6 @@ test('should throw if removing entities with existing components', () => {
         removeEntity(world, entId)
     }).toThrow()
 })
-*/
 
 // TODO test if an ent has a component
 
