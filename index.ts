@@ -1,12 +1,24 @@
-import {TypedArray} from './typedArrayTypes'
+type world = {
+    entityIdMemory: SharedArrayBuffer,
+    deletedEntitiesIndexMemory: SharedArrayBuffer,
+    componentIdMemory: SharedArrayBuffer,
+    componentMapMemory: SharedArrayBuffer,
+    deletedEntitiesMemory: SharedArrayBuffer,
+    lastEntityId: Uint32Array,
+    lastComponentId: Uint32Array,
+    componentMap: Uint32Array,
+    deletedEntities: Uint32Array,
+    deletedEntitiesIndex: Uint32Array,
+    maxEntityCount: number,
+}
 
 /**
  * Create a world object to store world state
  *
- * @param   {number} maxEntityCount The maximum number of entities that can exist in the world
- * @returns {object}                A world object to store all world state
+ * @param maxEntityCount - The maximum number of entities that can exist in the world
+ * @returns              A world object to store all world state
  */
-export function createWorld(maxEntityCount = 1_000_000) {
+export const createWorld = (maxEntityCount = 1_000_000) => {
     const entityIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
     const deletedEntitiesIndexMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
     const componentIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
@@ -27,15 +39,16 @@ export function createWorld(maxEntityCount = 1_000_000) {
         deletedEntities: new Uint32Array(deletedEntitiesMemory),
         deletedEntitiesIndex: new Uint32Array(deletedEntitiesIndexMemory),
         maxEntityCount,
+        // Single thread only data
+        queries: {},
     }
 }
 
 /**
- *
- * @param   {object} world ECS world object
- * @returns {number}       entityId
+ * @param   world - ECS world object
+ * @returns       - entityId
  */
-export function createEntity(world) {
+export const createEntity = (world: world) => {
     if (world.deletedEntitiesIndex[0]) {
         const id: number = world.deletedEntities[world.deletedEntitiesIndex[0] - 1]
         // world.deletedEntities[world.deletedEntitiesIndex[0]] = 0 // Helps for debugging, but isn't strictly necessary
@@ -48,11 +61,10 @@ export function createEntity(world) {
 }
 
 /**
- *
- * @param {object} world    ECS world object
- * @param {number} entityId The entitiyId to remove
+ * @param world    - ECS world object
+ * @param entityId - The entitiyId to remove
  */
-export function removeEntity(world, entityId) {
+export const removeEntity = (world, entityId) => {
     // Check if this entity has any components
     if (world.componentMap[entityId] !== 0) {
         throw new Error('entity has components')
@@ -61,39 +73,52 @@ export function removeEntity(world, entityId) {
     world.deletedEntitiesIndex[0] += 1
 }
 
+// TODO Type checking here needs some work
+// Zod seems like a good way to get automatic typing out and validation
+// type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array
+type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
+type component = {
+    componentId: number,
+    componentMemory: SharedArrayBuffer,
+    // TODO add types for component data (or let zod do it maybe)
+}
+// TODO Validate schema
 /**
- *
- * @param   {object}     world                 ECS world object
- * @param   {TypedArray} TypedArrayConstructor A typed array constructor
- * @returns {object}                           An ECS component
+ * @param   world  - ECS world object
+ * @param   schema - Component Schema
+ * @returns        - An ECS component
  */
-export function createComponent(world, TypedArrayConstructor) {
-    if (Object.getPrototypeOf(TypedArrayConstructor).name !== 'TypedArray') {
-        throw new Error('Component is not a typed array')
-    }
-
+export const createComponent = (world, schema): component => {
     // Add this component to the world data
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
 
-    const byteSize = TypedArrayConstructor.BYTES_PER_ELEMENT * world.maxEntityCount
-    const componentMemory = new SharedArrayBuffer(byteSize)
-    const componentData = new TypedArrayConstructor(componentMemory)
-
-    return {
+    let bytesPerEntity = 0
+    let offset = 0
+    Object.values(schema).forEach((TypedArray: TypedArrayConstructor) => {
+        bytesPerEntity += TypedArray.BYTES_PER_ELEMENT
+    })
+    const componentMemory = new SharedArrayBuffer(bytesPerEntity * world.maxEntityCount)
+    const component: component = {
         componentId,
         componentMemory,
-        componentData,
     }
+    Object.entries(schema).forEach(([key, TypedArray] : [string, TypedArrayConstructor]) => {
+        component[key] = new TypedArray(componentMemory, offset, world.maxEntityCount)
+        offset += TypedArray.BYTES_PER_ELEMENT * world.maxEntityCount
+    })
+    component.componentId = componentId
+    component.componentMemory = componentMemory
+
+    return component
 }
 
 /**
- *
- * @param {object} world     ECS world object
- * @param {object} component An ECS component
- * @param {number} entityId  Entitiy ID of the entitity to add this component to
+ * @param world     - ECS world object
+ * @param component - An ECS component
+ * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export function addComponent(world, component, entityId) {
+export const addComponent = (world, component, entityId) => {
     if ((world.componentMap[entityId] & (1 << component.componentId)) !== 0) {
         throw new Error('entity already has this component')
     }
@@ -103,12 +128,11 @@ export function addComponent(world, component, entityId) {
 }
 
 /**
- *
- * @param {object} world     ECS world object
- * @param {object} component An ECS component
- * @param {number} entityId  Entitiy ID of the entitity to add this component to
+ * @param world     - ECS world object
+ * @param component - An ECS component
+ * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export function removeComponent(world, component, entityId) {
+export const removeComponent = (world, component, entityId) => {
     if ((world.componentMap[entityId] & (1 << component.componentId)) === 0) {
         throw new Error('entity does not have this component')
     }
@@ -118,72 +142,56 @@ export function removeComponent(world, component, entityId) {
 }
 
 /**
- *
- * @param   {object}  world     ECS world object
- * @param   {object}  component An ECS component
- * @param   {number}  entityId  Entitiy ID of the entitity to add this component to
- * @returns {boolean}           Whether this entity has this component
+ * @param   world     - ECS world object
+ * @param   component - An ECS component
+ * @param   entityId  - Entitiy ID of the entitity to add this component to
+ * @returns           - Whether this entity has this component
  */
-export function hasComponent(world, component, entityId) {
+// eslint-disable-next-line arrow-body-style
+export const hasComponent = (world, component, entityId) => {
     return (world.componentMap[entityId] & (1 << component.componentId)) !== 0
 }
 
 /**
- *
- * @param   {object} world         ECS world object
- * @param   {Array}  components    A list of components to include in this query
- * @param   {Array}  notComponents A list of components to exclude in this query
- * @returns {object}               An ECS query
+ * @param   world         - An ECS World
+ * @param   components    - List of components to include
+ * @param   notComponents - List of components to exclude
+ * @returns               - A list of entities that match the query
  */
-export function createQuery(world, components, notComponents = []) {
-    const entitiesMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * world.maxEntityCount)
-    const entities = new Uint32Array(entitiesMemory)
-    const lastIndex = new Uint32Array(1) // TODO does this need to be a typed array if queries are create on each thread?
-
-    // Create a bitmask for the query
+export const query = (world, components, notComponents = []) => {
+    // Create a bitmask for all the components to find
     let mask = 0
     for (let index = 0; index < components.length; index += 1) {
         const {componentId} = components[index]
         mask |= (1 << componentId)
     }
 
+    // Create a bitmask for all the components to exclude
     let notMask = 0
     for (let index = 0; index < notComponents.length; index += 1) {
         const {componentId} = notComponents[index]
         notMask |= (1 << componentId)
     }
 
-    return {
-        components,
-        lastIndex,
-        entitiesMemory,
-        entities,
-        mask,
-        notMask,
+    // Check if this query has been run before, and if not create a new array for it
+    const queryKey = String(mask) + String(notMask)
+    if (!world.queries[queryKey]) {
+        world.queries[queryKey] = new Uint32Array(world.maxEntityCount)
     }
-}
-
-// Feature: Allow inclusive and exclusive queries
-// TODO: Query caching
-/**
- *
- * @param {object} world ECS world object
- * @param {object} query An ECS query
- */
-export function runQuery(world, query) {
-    // Reset the entitiy count
-    query.lastIndex[0] = 0
 
     // Find all entities that match the query from the world componentMap
+    let queryIndex = 0
     for (let entIndex = 0; entIndex < world.lastEntityId[0]; entIndex += 1) {
         // Continue if this ent has components in the not list
-        if ((world.componentMap[entIndex] & query.notMask) !== 0) {
+        if ((world.componentMap[entIndex] & notMask) !== 0) {
             continue
         }
         // If this entity has all of the components in the query
-        if ((world.componentMap[entIndex] & query.mask) === query.mask) {
-            query.entities[query.lastIndex[0]] = entIndex
-            query.lastIndex[0] += 1
+        if ((world.componentMap[entIndex] & mask) === mask) {
+            world.queries[queryKey][queryIndex] = entIndex
+            queryIndex += 1
         }
     }
+
+    return world.queries[queryKey].subarray(0, queryIndex)
 }

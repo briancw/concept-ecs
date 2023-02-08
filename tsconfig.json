@@ -1,6 +1,6 @@
 {
-    "include": ["."],
-    "exclude": ["archive"],
+    "include": [".", ".eslintrc.cjs"],
+    "exclude": ["archive", "perf"],
     "compilerOptions": {
         "noEmit": true,
         "target": "ESNext",

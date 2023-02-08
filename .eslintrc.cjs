@@ -13,7 +13,10 @@ module.exports = {
         node: true,
     },
     parser: '@typescript-eslint/parser',
-    plugins: ['@typescript-eslint'],
+    plugins: [
+        '@typescript-eslint',
+        'eslint-plugin-tsdoc',
+    ],
     parserOptions: {
         sourceType: 'module',
         // ecmaVersion: '2022',
@@ -23,6 +26,9 @@ module.exports = {
     },
     rules: {
         'no-bitwise': 'off',
+        'unicorn/filename-case': 'off',
+        'import/default': 'off', // Doesn't seem to work well with TS projects
+        'tsdoc/syntax': 'warn',
     },
     ignorePatterns: [
         'dist',
