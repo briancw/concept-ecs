@@ -133,7 +133,9 @@ test('check if an entity has a component', () => {
 
 test('should throw if creating a component with a non typed array', () => {
     expect(() => {
-        createComponent(world, Array)
+        createComponent(world, {
+            x: Number,
+        })
     }).toThrow()
 })
 

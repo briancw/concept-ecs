@@ -1,3 +1,4 @@
+
 type world = {
     entityIdMemory: SharedArrayBuffer,
     deletedEntitiesIndexMemory: SharedArrayBuffer,
@@ -73,42 +74,45 @@ export const removeEntity = (world, entityId) => {
     world.deletedEntitiesIndex[0] += 1
 }
 
-// TODO Type checking here needs some work
-// Zod seems like a good way to get automatic typing out and validation
-// type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array
-type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
-// type component = {
-//     componentId: number,
-//     componentMemory: SharedArrayBuffer,
-//     // TODO add types for component data (or let zod do it maybe)
-// }
-// TODO Validate schema
+// Holy types batman
 /**
  * @param   world  - ECS world object
  * @param   schema - Component Schema
  * @returns        - An ECS component
  */
-export const createComponent = (world, schema) => {
-    // Add this component to the world data
+type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
+type ComponentBase = {componentId: number, componentMemory: SharedArrayBuffer}
+
+export const createComponent = <T extends { [key: string]: new(buffer: ArrayBufferLike, offset: number, length: number) => any }>(world, schema: T): { [K in keyof T]: InstanceType<T[K]> } & ComponentBase => {
+    // Create the component object
+    const component = {} as { [K in keyof T]: InstanceType<T[K]> } & ComponentBase
+
+    // Check if all schema values are typed arrays
+    Object.values(schema).forEach((schemaValue) => {
+        if (Object.getPrototypeOf(schemaValue).name !== 'TypedArray') {
+            throw new Error('Component is not a typed array')
+        }
+    })
+
+    // Get a component ID from the world
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
+    component.componentId = componentId
 
+    // Calculate how many bytes each entity will need
     let bytesPerEntity = 0
-    let offset = 0
     Object.values(schema).forEach((TypedArray: TypedArrayConstructor) => {
         bytesPerEntity += TypedArray.BYTES_PER_ELEMENT
     })
     const componentMemory = new SharedArrayBuffer(bytesPerEntity * world.maxEntityCount)
-    const component = {
-        componentId,
-        componentMemory,
-    }
-    Object.entries(schema).forEach(([key, TypedArray] : [string, TypedArrayConstructor]) => {
-        component[key] = new TypedArray(componentMemory, offset, world.maxEntityCount)
+    component.componentMemory = componentMemory
+
+    // Create a new typed array for each key in the component schema\
+    let offset = 0
+    Object.entries(schema).forEach(([key, TypedArray]: [string, any]) => {
+        component[key as keyof T] = new TypedArray(componentMemory, offset, world.maxEntityCount)
         offset += TypedArray.BYTES_PER_ELEMENT * world.maxEntityCount
     })
-    component.componentId = componentId
-    component.componentMemory = componentMemory
 
     return component
 }
