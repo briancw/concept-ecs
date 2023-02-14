@@ -1,4 +1,4 @@
-import {createWorld, createComponent, createEntity, addComponent, removeComponent, removeEntity, createQuery, createEntryQuery} from './index'
+import {createWorld, createComponent, createEntity, addComponent, removeComponent, removeEntity, createQuery} from './index'
 
 const maxEntityCount = 1_000_000
 const world = createWorld(maxEntityCount)
@@ -6,10 +6,9 @@ const Position = createComponent(world, {value: Float32Array})
 const Velocity = createComponent(world, {value: Float32Array})
 const Foo = createComponent(world, {value: Float32Array})
 const query = createQuery(world, [Position, Velocity], [Foo])
-const newQuery = createEntryQuery(world, [Position, Velocity], [Foo])
 
 setInterval(() => {
-    const newEntCount = 500_000
+    const newEntCount = 100_000
 
     // Create Ents
     const createStart = performance.now()
@@ -22,12 +21,9 @@ setInterval(() => {
 
     // Query
     const queryStart = performance.now()
-    const ents = query.run()
+    const [ents, newEnts] = query.run({entry: true})
     const queryTime = performance.now() - queryStart
 
-    const entryQueryStart = performance.now()
-    const newEnts = newQuery.run()
-    const entryQueryTime = performance.now() - entryQueryStart
     for (let index = 0; index < newEnts.length; index += 1) {
         const entityId = newEnts[index]
         Velocity.value[entityId] = 1
@@ -50,7 +46,7 @@ setInterval(() => {
     }
     const removeTime = performance.now() - removeStart
 
-    // const fullTime = queryTime + iterationTime
+    // const fullTime = createTime + queryTime + iterationTime + removeTime
     // const fullTimePer = fullTime / newEntCount
     const createTimePerEnt = createTime / newEntCount
     const iterationPerEnt = iterationTime / newEntCount
@@ -62,13 +58,11 @@ setInterval(() => {
     console.log('remove time:', (removeTime).toFixed(2) + 'ms')
     console.log('iteration time:', (iterationTime).toFixed(2) + 'ms')
     console.log('query time:', (queryTime).toFixed(2) + 'ms')
-    console.log('entry query time:', (entryQueryTime).toFixed(2) + 'ms')
-    // console.log('full time', (fullTime).toFixed(2) + 'ms')
+    // console.log('full time:', (fullTime).toFixed(2) + 'ms')
 
     console.log('create time per:', (createTimePerEnt * 1000 * 1000).toFixed(2) + 'ns')
     console.log('remove time per:', (removeTimePerEnt * 1000 * 1000).toFixed(2) + 'ns')
     console.log('query time per:', (queryTime / newEntCount * 1000 * 1000).toFixed(2) + 'ns')
-    console.log('entry query time per:', (entryQueryTime / newEntCount * 1000 * 1000).toFixed(2) + 'ns')
     console.log('iteration time per:', (iterationPerEnt * 1000 * 1000).toFixed(2) + 'ns')
     // console.log('full time per:', (fullTimePer * 1000 * 1000).toFixed(2) + 'ns')
     console.log('----')

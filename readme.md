@@ -26,7 +26,7 @@ const query = createQuery(world, [Position, Velocity])
 
 // Systems can be simple functions which iterate over query results
 function system() {
-    const entities = query.run()
+    const [entities] = query.run()
     for (let index = 0; index < entities.length; index += 1) {
         const entityId = entities[index]
         Position.x[entityId] += Velocity.value[entityId]

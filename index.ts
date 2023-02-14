@@ -165,65 +165,43 @@ export const createQuery = (world, components, notComponents = []) =>
     new class Query {
         #mask = components.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
         #notMask = notComponents.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
+        #entitiesMap = new Uint8Array(world.maxEntityCount)
         #results = new Uint32Array(world.maxEntityCount)
+        #entryResults = new Uint32Array(world.maxEntityCount)
 
-        run() {
+        run({entry = false} = {}) {
             let resultsIndex = 0
+            let entryResults = 0
             // Iterate through all entities in the world
             for (let entityIndex = 0; entityIndex < world.lastEntityId[0]; entityIndex += 1) {
                 // Continue if this ent has components in the not list
                 if ((world.componentMap[entityIndex] & this.#notMask) !== 0) {
+                    if (entry) {
+                        this.#entitiesMap[entityIndex] = 0
+                    }
                     continue
                 }
                 // If this entity has all the components in the query
                 if ((world.componentMap[entityIndex] & this.#mask) === this.#mask) {
                     this.#results[resultsIndex] = entityIndex
                     resultsIndex += 1
-                }
-            }
-            return this.#results.subarray(0, resultsIndex)
-        }
-    }()
-
-/**
- * Return a query object for finding entities that newly match a list of components
- * @param   world         - The world object to search for entities in
- * @param   components    - The components that an entity must have to match the query
- * @param   notComponents - Optional. Components that will exclude an entity from the query
- * @returns               - A Query object with a `run` method that can be used to execute the query and retrieve matching entities
- */
-export const createEntryQuery = (world, components, notComponents = []) =>
-    new class EntryQuery {
-        #mask = components.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
-        #notMask = notComponents.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
-        #entitiesMap = new Uint8Array(world.maxEntityCount)
-        #results = new Uint32Array(world.maxEntityCount) // Re-use an array for results to save a little performance
-
-        run() {
-            let resultsIndex = 0
-            // Find all entities that match the query from the world's componentMap
-            for (let entityIndex = 0; entityIndex < world.lastEntityId[0]; entityIndex += 1) {
-                // If this ent has components in the not list
-                if ((world.componentMap[entityIndex] & this.#notMask) !== 0) {
-                    this.#entitiesMap[entityIndex] = 0
-                    continue
-                }
-                // If this entity has all of the components in the query
-                if ((world.componentMap[entityIndex] & this.#mask) === this.#mask) {
-                    // If this entity was not in the query before, add it to the temp array
-                    if (!this.#entitiesMap[entityIndex]) {
-                        // Add this entitiy to the results
-                        this.#results[resultsIndex] = entityIndex
-                        resultsIndex += 1
-                        // Add this entitiy to the map of entities which match the query
-                        this.#entitiesMap[entityIndex] = 1
+                    if (entry) {
+                        // eslint-disable-next-line unicorn/no-lonely-if
+                        if (this.#entitiesMap[entityIndex] === 0) {
+                            this.#entryResults[entryResults] = entityIndex
+                            entryResults += 1
+                            this.#entitiesMap[entityIndex] = 1
+                        }
                     }
                 }
-                else {
-                    // Remove this entity from the query
+                else if (entry) {
                     this.#entitiesMap[entityIndex] = 0
                 }
             }
-            return this.#results.subarray(0, resultsIndex)
+
+            return [
+                this.#results.subarray(0, resultsIndex),
+                this.#entryResults.subarray(0, entryResults),
+            ]
         }
     }()
