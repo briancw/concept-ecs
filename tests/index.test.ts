@@ -1,4 +1,4 @@
-import {createWorld, createComponent, createEntity, removeEntity, addComponent, removeComponent, query, hasComponent} from '../index'
+import {createWorld, createComponent, createEntity, removeEntity, addComponent, removeComponent, createQuery, createEntryQuery, hasComponent} from '../index'
 
 const maxEntityCount = 100
 const world = createWorld(maxEntityCount)
@@ -6,6 +6,8 @@ const Position: any = createComponent(world, {value: Float32Array})
 const Velocity: any = createComponent(world, {value: Float32Array})
 const Foo: any = createComponent(world, {value: Float32Array})
 const Bar: any = createComponent(world, {value: Float32Array})
+const query = createQuery(world, [Position, Velocity], [Bar])
+const entryQuery = createEntryQuery(world, [Position, Velocity], [Bar])
 
 test('create a world', () => {
     expect(world).toBeDefined()
@@ -17,7 +19,7 @@ test('create a component', () => {
     expect(Position.value.length).toBe(maxEntityCount)
 })
 
-test('create 5 entities matching the query', () => {
+test('create 5 entities matching a query', () => {
     const entCount = 5
     for (let index = 0; index < entCount; index += 1) {
         const entId = createEntity(world)
@@ -28,12 +30,12 @@ test('create 5 entities matching the query', () => {
         Velocity.value[entId] = 1
 
         // Expect this ent to exist in the query
-        const ents = query(world, [Position, Velocity], [Bar])
+        const ents = query.run()
         expect(ents).toContain(entId)
     }
 
     // Expect there to be as many ents in the query as created
-    const ents = query(world, [Position, Velocity], [Bar])
+    const ents = query.run()
     expect(ents.length).toBe(entCount)
 })
 
@@ -49,12 +51,12 @@ test('create 5 entities matching the query plus more components', () => {
         Velocity.value[entId] = 1
 
         // Expect this ent to exist in the query
-        const ents = query(world, [Position, Velocity], [Bar])
+        const ents = query.run()
         expect(ents).toContain(entId)
     }
 
     // Expect there to be as many ents in the query as created
-    const ents = query(world, [Position, Velocity], [Bar])
+    const ents = query.run()
     expect(ents.length).toBe(entCount * 2) // TODO this isn't great
 })
 
@@ -66,8 +68,11 @@ test('create 5 entities not matching the query based on a NOT condition', () => 
         addComponent(world, Velocity, entId)
         addComponent(world, Bar, entId)
 
-        const ents = query(world, [Position, Velocity], [Bar])
+        const ents = query.run()
         expect(ents).not.toContain(entId)
+
+        const newEnts = entryQuery.run()
+        expect(newEnts).not.toContain(entId)
     }
 })
 
@@ -78,13 +83,13 @@ test('create 5 ents not matching the query', () => {
         addComponent(world, Position, entId)
 
         // Expect this ent to not exist in the query
-        const ents = query(world, [Position, Velocity], [Bar])
+        const ents = query.run()
         expect(ents).not.toContain(entId)
     }
 })
 
 test('update component values from a query', () => {
-    const ents = query(world, [Position, Velocity], [Bar])
+    const ents = query.run()
     for (let index = 0; index < ents.length; index += 1) {
         const entId = ents[index]
         Position.value[entId] += Velocity.value[entId]
@@ -99,13 +104,13 @@ test('update component values from a query', () => {
 })
 
 test('remove components from entities', () => {
-    const ents = query(world, [Position, Velocity], [Bar])
+    const ents = query.run()
     const randomIndex = Math.floor(Math.random() * ents.length)
     const entId = ents[randomIndex]
     removeComponent(world, Position, entId)
     removeComponent(world, Velocity, entId)
 
-    const ents2 = query(world, [Position, Velocity], [Bar])
+    const ents2 = query.run()
     expect(ents2).not.toContain(entId)
 })
 
@@ -121,6 +126,39 @@ test('id re-use', () => {
     removeEntity(world, entId)
     const newEntId = createEntity(world)
     expect(newEntId).toBe(entId)
+})
+
+test('create entities matching an entry query', () => {
+    for (let index = 0; index < 5; index += 1) {
+        const entId = createEntity(world)
+        addComponent(world, Position, entId)
+        addComponent(world, Velocity, entId)
+
+        const newEnts = entryQuery.run()
+        expect(newEnts).toContain(entId)
+    }
+
+    const newEnts2 = entryQuery.run()
+    expect(newEnts2.length).toBe(0)
+})
+
+test('create entities matching an entry query by removing and re-adding components', () => {
+    const entId = createEntity(world)
+    addComponent(world, Position, entId)
+    addComponent(world, Velocity, entId)
+
+    const newEnts = entryQuery.run()
+    expect(newEnts).toContain(entId)
+
+    removeComponent(world, Position, entId)
+    removeComponent(world, Velocity, entId)
+    entryQuery.run()
+
+    addComponent(world, Position, entId)
+    addComponent(world, Velocity, entId)
+    const newEnts2 = entryQuery.run()
+    console.log(newEnts2)
+    expect(newEnts2).toContain(entId)
 })
 
 test('check if an entity has a component', () => {

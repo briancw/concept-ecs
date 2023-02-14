@@ -4,32 +4,33 @@ An attempt at making an ECS that allows for simple multithreading in Javascript.
 
 ## Simple Example
 ```javascript
-import {createWorld, createComponent, createEntity, addComponent, createQuery, runQuery} from 'concept-ecs'
+import {createWorld, createComponent, createEntity, addComponent, createQuery, removeComponent, removeEntity} from 'concept-ecs'
 
 const maxEntityCount = 1_000_000
 
 // The world object stores all state required by the ECS
 const world = createWorld(maxEntityCount)
 
-// Components are based on Typed Arrays. The createComponent function takes any TypedArray constructor
-const Position = createComponent(world, Float32Array)
-
-// Queries will find all entities with specified components
-const query = createQuery(world, [Position])
+// Components are based on Typed Arrays. The createComponent function takes a schema of TypedArray constructors
+const Position = createComponent(world, {x: Float32Array, y: Float32Array})
+const Velocity = createComponent(world, {value: Float32Array})
 
 // Entities are indexes which are used to store data in any component
 const entityId = createEntity(world)
 addComponent(world, Position, entityId)
-Position[entityId] = 42
+addComponent(world, Velocity, entityId)
+Velocity.value[entityId] = 2
 
-// Systems are simple functions that typically run a query
+// Queries will find all entities with specified components
+const query = createQuery(world, [Position, Velocity])
+
+// Systems can be simple functions which iterate over query results
 function system() {
-    runQuery(world, query)
-
-    for (let index = 0; index < query.lastIndex[0]; index += 1) {
-        const entityId = query.entities[index]
-        Position[entityId] += 1
-        console.log(Position[entityId])
+    const entities = query.run()
+    for (let index = 0; index < entities.length; index += 1) {
+        const entityId = entities[index]
+        Position.x[entityId] += Velocity.value[entityId]
+        console.log(Position.x[entityId])
     }
 }
 
@@ -37,6 +38,7 @@ system()
 
 // All components must be removed from an entity before the entity can be removed
 removeComponent(world, Position, entityId)
+removeComponent(world, Velocity, entityId)
 
 // Entity ID's that are removed are placed on a stack and will be resused first before new entity ID's are issued
 removeEntity(world, entityId)

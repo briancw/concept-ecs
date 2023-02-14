@@ -27,6 +27,7 @@ module.exports = {
     rules: {
         'no-bitwise': 'off',
         'unicorn/filename-case': 'off',
+        'unicorn/consistent-function-scoping': ['error', {checkArrowFunctions: false}],
         'import/default': 'off', // Doesn't seem to work well with TS projects
         'tsdoc/syntax': 'warn',
     },
