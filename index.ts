@@ -1,18 +1,7 @@
+/* eslint-disable unicorn/no-new-array */
+/* eslint-disable unicorn/prefer-math-trunc */
 
-type world = {
-    entityIdMemory: SharedArrayBuffer,
-    deletedEntitiesIndexMemory: SharedArrayBuffer,
-    componentIdMemory: SharedArrayBuffer,
-    componentMapMemory: SharedArrayBuffer,
-    deletedEntitiesMemory: SharedArrayBuffer,
-    lastEntityId: Uint32Array,
-    lastComponentId: Uint32Array,
-    componentMap: Uint32Array,
-    deletedEntities: Uint32Array,
-    deletedEntitiesIndex: Uint32Array,
-    maxEntityCount: number,
-}
-
+const itemsPerMap = 4
 /**
  * Create a world object to store world state
  *
@@ -20,10 +9,11 @@ type world = {
  * @returns              A world object to store all world state
  */
 export const createWorld = (maxEntityCount = 1_000_000) => {
+    const maxComponents = 128
     const entityIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
     const deletedEntitiesIndexMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
     const componentIdMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT)
-    const componentMapMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * maxEntityCount)
+    const componentMapMemory = new SharedArrayBuffer(Uint16Array.BYTES_PER_ELEMENT * maxEntityCount * (maxComponents / 16))
     const deletedEntitiesMemory = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * maxEntityCount)
 
     return {
@@ -36,21 +26,21 @@ export const createWorld = (maxEntityCount = 1_000_000) => {
         // World Data
         lastEntityId: new Uint32Array(entityIdMemory),
         lastComponentId: new Uint32Array(componentIdMemory),
-        componentMap: new Uint32Array(componentMapMemory),
+        componentMap: new Uint16Array(componentMapMemory),
         deletedEntities: new Uint32Array(deletedEntitiesMemory),
         deletedEntitiesIndex: new Uint32Array(deletedEntitiesIndexMemory),
         maxEntityCount,
     }
 }
+type World = ReturnType<typeof createWorld>
 
 /**
  * @param   world - ECS world object
  * @returns       - entityId
  */
-export const createEntity = (world: world) => {
+export const createEntity = (world: World) => {
     if (world.deletedEntitiesIndex[0]) {
         const id: number = world.deletedEntities[world.deletedEntitiesIndex[0] - 1]
-        // world.deletedEntities[world.deletedEntitiesIndex[0]] = 0 // Helps for debugging, but isn't strictly necessary
         world.deletedEntitiesIndex[0] -= 1
         return id
     }
@@ -63,27 +53,26 @@ export const createEntity = (world: world) => {
  * @param world    - ECS world object
  * @param entityId - The entitiyId to remove
  */
-export const removeEntity = (world, entityId) => {
+export const removeEntity = (world: World, entityId: number) => {
     // Check if this entity has any components
-    if (world.componentMap[entityId] !== 0) {
+    if (world.componentMap[entityId * itemsPerMap] !== 0) {
         throw new Error('entity has components')
     }
     world.deletedEntities[world.deletedEntitiesIndex[0]] = entityId
     world.deletedEntitiesIndex[0] += 1
 }
 
-// Holy types batman
-/**
- * @param   world  - ECS world object
- * @param   schema - Component Schema
- * @returns        - An ECS component
- */
 type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
 type ComponentBase = {
     componentId: number,
     componentMemory?: SharedArrayBuffer,
 }
 
+/**
+ * @param   world  - ECS world object
+ * @param   schema - Component Schema
+ * @returns        - An ECS component
+ */
 export const createComponent = <T extends { [key: string]: new(buffer: ArrayBufferLike, offset: number, length: number) => any }>(world, schema?: T): { [K in keyof T]: InstanceType<T[K]> } & ComponentBase => {
     const component = {} as { [K in keyof T]: InstanceType<T[K]> } & ComponentBase
 
@@ -109,7 +98,7 @@ export const createComponent = <T extends { [key: string]: new(buffer: ArrayBuff
         const componentMemory = new SharedArrayBuffer(bytesPerEntity * world.maxEntityCount)
         component.componentMemory = componentMemory
 
-        // Create a new typed array for each key in the component schema\
+        // Create a new typed array for each key in the component schema
         let offset = 0
         Object.entries(schema).forEach(([key, TypedArray]: [string, any]) => {
             component[key as keyof T] = new TypedArray(componentMemory, offset, world.maxEntityCount)
@@ -125,13 +114,14 @@ export const createComponent = <T extends { [key: string]: new(buffer: ArrayBuff
  * @param component - An ECS component
  * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export const addComponent = (world, component, entityId) => {
-    if ((world.componentMap[entityId] & (1 << component.componentId)) !== 0) {
+export const addComponent = (world: World, component, entityId: number) => {
+    if (hasComponent(world, component, entityId)) {
         throw new Error('entity already has this component')
     }
 
     // Add component to componentMap for this entity
-    world.componentMap[entityId] |= (1 << component.componentId)
+    const mapIndex = (entityId * itemsPerMap) + ~~(component.componentId / 16)
+    world.componentMap[mapIndex] |= (1 << component.componentId % 16)
 }
 
 /**
@@ -139,13 +129,14 @@ export const addComponent = (world, component, entityId) => {
  * @param component - An ECS component
  * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export const removeComponent = (world, component, entityId) => {
-    if ((world.componentMap[entityId] & (1 << component.componentId)) === 0) {
+export const removeComponent = (world: World, component, entityId: number) => {
+    if (!hasComponent(world, component, entityId)) {
         throw new Error('entity does not have this component')
     }
 
     // Remove this component from the component map
-    world.componentMap[entityId] &= ~(1 << component.componentId)
+    const mapIndex = (entityId * itemsPerMap) + ~~(component.componentId / 16)
+    world.componentMap[mapIndex] &= ~(1 << component.componentId % 16)
 }
 
 /**
@@ -154,9 +145,10 @@ export const removeComponent = (world, component, entityId) => {
  * @param   entityId  - Entitiy ID of the entitity to add this component to
  * @returns           - Whether this entity has this component
  */
-// eslint-disable-next-line arrow-body-style
-export const hasComponent = (world, component, entityId) => {
-    return (world.componentMap[entityId] & (1 << component.componentId)) !== 0
+
+export const hasComponent = (world: World, component, entityId: number) => {
+    const mapIndex = (entityId * itemsPerMap) + ~~(component.componentId / 16)
+    return (world.componentMap[mapIndex] & (1 << component.componentId % 16)) !== 0
 }
 
 /**
@@ -166,28 +158,57 @@ export const hasComponent = (world, component, entityId) => {
  * @param   notComponents - Optional. Components that will exclude an entity from the query
  * @returns               - A Query object with a `run` method that can be used to execute the query and retrieve matching entities
  */
-export const createQuery = (world, components, notComponents = []) =>
+export const createQuery = (world: World, components, notComponents = []) =>
     new class Query {
-        #mask = components.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
-        #notMask = notComponents.reduce((mask, {componentId}) => mask | (1 << componentId), 0)
         #entitiesMap = new Uint8Array(world.maxEntityCount)
         #results = new Uint32Array(world.maxEntityCount)
         #entryResults = new Uint32Array(world.maxEntityCount)
+
+        #masks = new Array(itemsPerMap).fill(0)
+        #notMasks = new Array(itemsPerMap).fill(0)
+
+        constructor() {
+            // Create masks
+            for (let index = 0; index < components.length; index += 1) {
+                const component = components[index]
+                const mapIndex = Math.trunc(component.componentId / 16)
+                this.#masks[mapIndex] |= (1 << component.componentId % 16)
+            }
+
+            // Create not masks
+            for (let index = 0; index < notComponents.length; index += 1) {
+                const component = notComponents[index]
+                const mapIndex = Math.trunc(component.componentId / 16)
+                this.#notMasks[mapIndex] |= (1 << component.componentId % 16)
+            }
+        }
 
         run({entry = false} = {}) {
             let resultsIndex = 0
             let entryResults = 0
             // Iterate through all entities in the world
             for (let entityIndex = 0; entityIndex < world.lastEntityId[0]; entityIndex += 1) {
+                // TODO this is extremely performant, and just as clunky
                 // Continue if this ent has components in the not list
-                if ((world.componentMap[entityIndex] & this.#notMask) !== 0) {
+                if (
+                    (world.componentMap[entityIndex * itemsPerMap] & this.#notMasks[0]) !== 0
+                    || (world.componentMap[(entityIndex * itemsPerMap) + 1] & this.#notMasks[1]) !== 0
+                    || (world.componentMap[(entityIndex * itemsPerMap) + 2] & this.#notMasks[2]) !== 0
+                    || (world.componentMap[(entityIndex * itemsPerMap) + 3] & this.#notMasks[3]) !== 0
+                ) {
                     if (entry) {
                         this.#entitiesMap[entityIndex] = 0
                     }
                     continue
                 }
+
                 // If this entity has all the components in the query
-                if ((world.componentMap[entityIndex] & this.#mask) === this.#mask) {
+                if (
+                    ((world.componentMap[entityIndex * itemsPerMap] & this.#masks[0]) === this.#masks[0])
+                    && ((world.componentMap[(entityIndex * itemsPerMap) + 1] & this.#masks[1]) === this.#masks[1])
+                    && ((world.componentMap[(entityIndex * itemsPerMap) + 2] & this.#masks[2]) === this.#masks[2])
+                    && ((world.componentMap[(entityIndex * itemsPerMap) + 3] & this.#masks[3]) === this.#masks[3])
+                ) {
                     this.#results[resultsIndex] = entityIndex
                     resultsIndex += 1
                     if (entry && this.#entitiesMap[entityIndex] === 0) {
