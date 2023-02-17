@@ -63,23 +63,23 @@ export const removeEntity = (world: World, entityId: number) => {
 }
 
 type TypedArrayConstructor = Int8ArrayConstructor | Uint8ArrayConstructor | Uint8ClampedArrayConstructor | Int16ArrayConstructor | Uint16ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor | Float32ArrayConstructor | Float64ArrayConstructor
-type ComponentBase = {
+type Component = {
     componentId: number,
     componentMemory?: SharedArrayBuffer,
+    [key: string]: any
 }
-
 /**
  * @param   world  - ECS world object
  * @param   schema - Component Schema
  * @returns        - An ECS component
  */
-export const createComponent = <T extends { [key: string]: new(buffer: ArrayBufferLike, offset: number, length: number) => any }>(world, schema?: T): { [K in keyof T]: InstanceType<T[K]> } & ComponentBase => {
-    const component = {} as { [K in keyof T]: InstanceType<T[K]> } & ComponentBase
-
+export const createComponent = (world, schema?) => {
     // Get a component ID from the world
     const componentId: number = world.lastComponentId[0]
     world.lastComponentId[0] += 1
-    component.componentId = componentId
+    const component: Component = {
+        componentId,
+    }
 
     // If this component does not have a schema, it is a tag component
     if (schema) {
@@ -100,23 +100,28 @@ export const createComponent = <T extends { [key: string]: new(buffer: ArrayBuff
 
         // Create a new typed array for each key in the component schema
         let offset = 0
-        Object.entries(schema).forEach(([key, TypedArray]: [string, any]) => {
-            component[key as keyof T] = new TypedArray(componentMemory, offset, world.maxEntityCount)
+        Object.entries(schema).forEach(([key, TypedArray]: [string, TypedArrayConstructor]) => {
+            component[key] = new TypedArray(componentMemory, offset, world.maxEntityCount)
             offset += TypedArray.BYTES_PER_ELEMENT * world.maxEntityCount
         })
     }
 
     return component
 }
+// type Component = ReturnType<typeof createComponent>
 
 /**
  * @param world     - ECS world object
  * @param component - An ECS component
  * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export const addComponent = (world: World, component, entityId: number) => {
+export const addComponent = (world: World, component: Component, entityId: number) => {
     if (hasComponent(world, component, entityId)) {
         throw new Error('entity already has this component')
+    }
+
+    if (~~(component.componentId / 16) >= itemsPerMap) {
+        throw new Error('too many components')
     }
 
     // Add component to componentMap for this entity
@@ -129,7 +134,7 @@ export const addComponent = (world: World, component, entityId: number) => {
  * @param component - An ECS component
  * @param entityId  - Entitiy ID of the entitity to add this component to
  */
-export const removeComponent = (world: World, component, entityId: number) => {
+export const removeComponent = (world: World, component: Component, entityId: number) => {
     if (!hasComponent(world, component, entityId)) {
         throw new Error('entity does not have this component')
     }
@@ -146,7 +151,7 @@ export const removeComponent = (world: World, component, entityId: number) => {
  * @returns           - Whether this entity has this component
  */
 
-export const hasComponent = (world: World, component, entityId: number) => {
+export const hasComponent = (world: World, component: Component, entityId: number) => {
     const mapIndex = (entityId * itemsPerMap) + ~~(component.componentId / 16)
     return (world.componentMap[mapIndex] & (1 << component.componentId % 16)) !== 0
 }
@@ -158,7 +163,7 @@ export const hasComponent = (world: World, component, entityId: number) => {
  * @param   notComponents - Optional. Components that will exclude an entity from the query
  * @returns               - A Query object with a `run` method that can be used to execute the query and retrieve matching entities
  */
-export const createQuery = (world: World, components, notComponents = []) =>
+export const createQuery = (world: World, components: Component[], notComponents: Component[] = []) =>
     new class Query {
         #entitiesMap = new Uint8Array(world.maxEntityCount)
         #results = new Uint32Array(world.maxEntityCount)
